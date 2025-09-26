@@ -1,0 +1,2028 @@
+{
+  "name": "\ud83c\udfaf Learning-to-Content AI Generator - FINAL COLOR-CODED",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "learning-to-content",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-trigger",
+      "name": "\ud83d\ude80 Webhook (trigger)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        300,
+        400
+      ],
+      "webhookId": "learning-to-content",
+      "color": "#FF6B6B"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.headers['x-webhook-secret'] || $json.headers['X-Webhook-Secret'] }}",
+              "operation": "equal",
+              "value2": "={{ $env.WEBHOOK_SECRET }}"
+            }
+          ]
+        }
+      },
+      "id": "if-check-webhook-secret",
+      "name": "\ud83d\udd10 IF (check x-webhook-secret)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        520,
+        400
+      ],
+      "color": "#FF6B6B"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": false, \"error\": \"Unauthorized - Invalid webhook secret\"}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "respond-401-unauthorized",
+      "name": "\ud83d\udeab Respond 401: Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        520,
+        600
+      ],
+      "color": "#FF6B6B"
+    },
+    {
+      "parameters": {
+        "jsCode": "// InitRun: make run_id, normalize payload\nconst webhookData = $json;\nconst runTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);\nconst runId = `run-${runTimestamp}`;\n\n// Use embedded prompts (no file system access in n8n)\nconst topicPrompt = `You are a learning assistant designed to structure raw study notes into a social media content plan.\\n\\nRead the following notes and extract every distinct topic in the logical order they appear.\\n\\nFor each topic return a JSON object with these keys:\\n{\\n  \"TopicID\": \"{{TOPIC_ID}}\",\\n  \"Order\": <number in sequence starting at 1>,\\n  \"Title\": \"<short engaging title, max 8 words>\",\\n  \"MainPoints\": [\"point 1\", \"point 2\", \"point 3\"],\\n  \"TransitionNote\": \"<one sentence bridge to the next topic>\",\\n  \"Status\": \"Pending\",\\n  \"Track\": \"<series identifier from notes if obvious, else 'General'>\"\\n}\\n\\nNotes:\\n\"${webhookData.raw_notes}\"\\n\\nOutput: A JSON array only. No explanations.`;\n\nconst scriptPrompt = `You are an expert content creator for educational social media shorts.\\nProduce a structured JSON for the topic, including a short script, four sequential image prompts, and a short TTS voice style label.\\n\\n- TopicID: {{TOPIC_ID}}\\n- Title: {{TITLE}}\\n- MainPoints: {{MAIN_POINTS}}\\n- Tone: {{TONE}}\\n- Language: {{LANGUAGE}}\\n- TransitionNote: {{TRANSITION_NOTE}}\\n- Audience: Beginners in India\\n\\nScript Instructions:\\n1. Start with a strong, relatable hook (max 15 words).\\n2. Explain the main points in simple language with a real-world Indian example.\\n3. Keep the entire script under 150 words.\\n4. End with a teaser for the next topic: '{{TRANSITION_NOTE}}'\\n\\nVoiceStyle:\\n- Provide a short label, e.g., \"Young Male\", \"Calm Female\".\\n\\nImagePrompts Instructions:\\n- Create exactly 4 detailed image prompts in logical order.\\n- Format: vertical infographic (9:16).\\n- Style: educational infographic, vibrant colors, 3D render, minimalist, clean background.\\n\\nReturn JSON ONLY:\\n{\\n  \"TopicID\": \"{{TOPIC_ID}}\",\\n  \"RunID\": \"{{RUN_ID}}\",\\n  \"Language\": \"{{LANGUAGE}}\",\\n  \"Tone\": \"{{TONE}}\",\\n  \"Script\": \"<final short script>\",\\n  \"VoiceStyle\": \"<label>\",\\n  \"ImagePrompts\": {\\n    \"Hook\": \"<prompt for hook image>\",\\n    \"MainPoint1\": \"<prompt for main point 1 image>\",\\n    \"MainPoint2\": \"<prompt for main point 2 image>\",\\n    \"Teaser\": \"<prompt for teaser image>\"\\n  }\\n}`;\n\nconst captionPrompt = `You are a social media manager.\\n\\nWrite a JSON object with a short caption and hashtags.\\n\\n- TopicID: {{TOPIC_ID}}\\n- Title: {{TITLE}}\\n- Script: {{SCRIPT_TEXT}}\\n- Language: {{LANGUAGE}}\\n\\nConstraints:\\n- Caption <= 120 characters\\n- If Hinglish, mix Hindi + English naturally\\n- 3\u20135 hashtags\\n\\nReturn JSON ONLY:\\n{\\n  \"TopicID\": \"{{TOPIC_ID}}\",\\n  \"Caption\": \"<caption>\",\\n  \"Hashtags\": [\"#tag1\",\"#tag2\",\"#tag3\"]\\n}`;\n\n// Create normalized payload with ALL UI fields\nreturn [{\n  json: {\n    ...webhookData,\n    runId,\n    runTimestamp,\n    topicPrompt,\n    scriptPromptTemplate: scriptPrompt,\n    captionPromptTemplate: captionPrompt,\n    startTime: new Date().toISOString(),\n    // Normalize ALL UI payload fields\n    language: webhookData.language || 'English',\n    tone: webhookData.tone || 'Friendly',\n    voice_gender: webhookData.voice_gender || 'Male',\n    posts_per_day: webhookData.posts_per_day || 1,\n    platforms: Array.isArray(webhookData.platforms) ? webhookData.platforms : [webhookData.platforms || 'Instagram'],\n    track: webhookData.track || 'General',\n    full_pipeline: webhookData.full_pipeline !== false,\n    image_aspect_ratio: webhookData.image_aspect_ratio || '9:16',\n    image_width: webhookData.image_width || 1080,\n    image_height: webhookData.image_height || 1920,\n    // Google Drive folder IDs (with fallbacks)\n    audioFolderId: $env.AUDIO_FOLDER_ID || 'AUDIO_FOLDER_ID_NOT_SET',\n    imagesFolderId: $env.IMAGES_FOLDER_ID || 'IMAGES_FOLDER_ID_NOT_SET',\n    videosFolderId: $env.VIDEOS_FOLDER_ID || 'VIDEOS_FOLDER_ID_NOT_SET'\n  }\n}];"
+      },
+      "id": "function-init-run",
+      "name": "\u2699\ufe0f Function: InitRun",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        300
+      ],
+      "color": "#FF6B6B"
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
+        "sendHeaders": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": true,
+        "body": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": $json.topicPrompt || \"Extract topics from the following text\"\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"response_mime_type\": \"application/json\"\n  }\n}",
+        "method": "POST"
+      },
+      "id": "http-gemini-topic-extraction",
+      "name": "\ud83e\udde0 HTTP: Gemini \u2013 Topic Extraction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        960,
+        300
+      ],
+      "color": "#4ECDC4"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "API_Usage",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $items('\u2699\ufe0f Function: InitRun')[0].json.runId }}"
+            },
+            {
+              "column": "Provider",
+              "fieldValue": "Gemini"
+            },
+            {
+              "column": "Endpoint",
+              "fieldValue": "generateContent"
+            },
+            {
+              "column": "Model",
+              "fieldValue": "gemini-1.5-flash-latest"
+            },
+            {
+              "column": "Operation",
+              "fieldValue": "Topic Extraction"
+            },
+            {
+              "column": "InputTokens",
+              "fieldValue": "={{ $json.usageMetadata?.promptTokenCount || 0 }}"
+            },
+            {
+              "column": "OutputTokens",
+              "fieldValue": "={{ $json.usageMetadata?.candidatesTokenCount || 0 }}"
+            },
+            {
+              "column": "TotalTokens",
+              "fieldValue": "={{ $json.usageMetadata?.totalTokenCount || 0 }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "Success"
+            }
+          ]
+        }
+      },
+      "id": "log-api-usage-topic-extraction",
+      "name": "\ud83d\udcca Log API Usage: Topic Extraction",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        960,
+        500
+      ],
+      "color": "#96CEB4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Topics \u2192 creates 1 item per topic with ALL UI payload fields\nconst response = $input.first().json;\nconst raw = response.candidates?.[0]?.content?.parts?.[0]?.text;\nif (!raw) throw new Error('No response from Gemini for topic extraction');\n\nlet topics;\ntry {\n  topics = JSON.parse(raw);\n} catch (e) {\n  throw new Error(`Failed to parse topics JSON: ${e.message}`);\n}\n\nif (!Array.isArray(topics) || topics.length === 0) {\n  throw new Error('No topics extracted from notes');\n}\n\nconst webhook = $items(\"\u2699\ufe0f Function: InitRun\")[0].json;\n\n// Create individual items for each topic with ALL UI fields\nconst processedTopics = topics.map((topic, index) => {\n  const topicRunId = `${webhook.runId}-topic-${String(index + 1).padStart(3, '0')}`;\n  return {\n    json: {\n      // Preserve ALL original webhook data\n      raw_notes: webhook.raw_notes,\n      startTime: webhook.startTime,\n      runId: webhook.runId,\n      runTimestamp: webhook.runTimestamp,\n      \n      // UI payload fields - EXACTLY as sent from UI\n      language: webhook.language,\n      tone: webhook.tone,\n      voice_gender: webhook.voice_gender,\n      posts_per_day: webhook.posts_per_day,\n      platforms: webhook.platforms,\n      track: webhook.track,\n      full_pipeline: webhook.full_pipeline,\n      image_aspect_ratio: webhook.image_aspect_ratio,\n      image_width: webhook.image_width,\n      image_height: webhook.image_height,\n      \n      // Topic-specific data from AI extraction\n      TopicID: topic.TopicID || `topic-${topicRunId}`,\n      Order: topic.Order || index + 1,\n      Title: topic.Title || '',\n      MainPoints: Array.isArray(topic.MainPoints) ? topic.MainPoints : [topic.MainPoints || ''],\n      MainPointsText: Array.isArray(topic.MainPoints) ? topic.MainPoints.join(', ') : (topic.MainPoints || ''),\n      TransitionNote: topic.TransitionNote || '',\n      Track: topic.Track || webhook.track || 'General',\n      Status: 'Pending',\n      \n      // Normalized fields for processing (with proper UI mapping)\n      Language: webhook.language || 'English',\n      Tone: webhook.tone || 'Friendly', \n      VoiceGender: webhook.voice_gender || 'Male',\n      Platforms: Array.isArray(webhook.platforms) ? webhook.platforms.join(', ') : (webhook.platforms || 'Instagram'),\n      FullPipeline: webhook.full_pipeline !== false,\n      \n      // Processing fields\n      TopicRunID: topicRunId,\n      scriptPromptTemplate: webhook.scriptPromptTemplate,\n      captionPromptTemplate: webhook.captionPromptTemplate,\n      \n      // Google Drive folder IDs\n      audioFolderId: webhook.audioFolderId,\n      imagesFolderId: webhook.imagesFolderId,\n      videosFolderId: webhook.videosFolderId\n    }\n  };\n});\n\nreturn processedTopics;"
+      },
+      "id": "function-parse-topics",
+      "name": "\ud83d\udccb Function: Parse Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        300
+      ],
+      "color": "#4ECDC4"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "Topic Backlog",
+        "columnRow": "A1:AZ1",
+        "dataMode": "autoMapInputData"
+      },
+      "id": "google-sheets-append-topic-backlog",
+      "name": "\ud83d\udcca Google Sheets: Append Topic Backlog",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        300
+      ],
+      "color": "#4ECDC4"
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "id": "split-in-batches-iterate-topics",
+      "name": "\ud83d\udd04 Split In Batches (iterate topics)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1620,
+        300
+      ],
+      "color": "#45B7D1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "Generated Content",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "Pending"
+            },
+            {
+              "column": "Title",
+              "fieldValue": "={{ $json.Title }}"
+            },
+            {
+              "column": "Language",
+              "fieldValue": "={{ $json.Language }}"
+            },
+            {
+              "column": "Tone",
+              "fieldValue": "={{ $json.Tone }}"
+            },
+            {
+              "column": "VoiceGender",
+              "fieldValue": "={{ $json.VoiceGender }}"
+            },
+            {
+              "column": "StartTimestamp",
+              "fieldValue": "={{ $json.startTime }}"
+            },
+            {
+              "column": "UpdatedAt",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "google-sheets-upsert-generated-content-seed",
+      "name": "\ud83d\udcca Google Sheets: Upsert Generated Content seed row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1840,
+        300
+      ],
+      "color": "#45B7D1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate Script + Image Prompts using Gemini with EXACT prompt format\nconst topic = $json;\n\n// Format MainPoints properly as per your prompt requirements\nconst mainPointsText = Array.isArray(topic.MainPoints) ? topic.MainPoints.join(', ') : (topic.MainPoints || '');\n\nconst scriptPrompt = topic.scriptPromptTemplate\n  .replace(/{{TOPIC_ID}}/g, topic.TopicID)\n  .replace(/{{TITLE}}/g, topic.Title)\n  .replace(/{{MAIN_POINTS}}/g, mainPointsText)  // Use text format, not JSON\n  .replace(/{{TONE}}/g, topic.Tone)\n  .replace(/{{LANGUAGE}}/g, topic.Language)\n  .replace(/{{TRANSITION_NOTE}}/g, topic.TransitionNote)\n  .replace(/{{RUN_ID}}/g, topic.TopicRunID);  // n8n injects this, not AI\n\nconst scriptResp = await $httpRequest({\n  method: 'POST',\n  url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent',\n  headers: { 'x-goog-api-key': $env.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n  body: {\n    contents: [{ parts: [{ text: scriptPrompt }] }],\n    generationConfig: { response_mime_type: 'application/json' }\n  },\n  json: true\n});\n\nif (!scriptResp.candidates || !scriptResp.candidates[0] || !scriptResp.candidates[0].content) {\n  throw new Error('Invalid response from Gemini for script generation');\n}\n\nconst scriptData = JSON.parse(scriptResp.candidates[0].content.parts[0].text);\n\n// Validate required fields from your prompt\nif (!scriptData.Script || !scriptData.VoiceStyle || !scriptData.ImagePrompts) {\n  throw new Error('Missing required fields in script generation response');\n}\n\nreturn [{\n  json: {\n    ...topic,\n    Script: scriptData.Script,\n    VoiceStyle: scriptData.VoiceStyle,\n    ImagePrompts: scriptData.ImagePrompts,\n    ImagePromptsJson: JSON.stringify(scriptData.ImagePrompts)\n  }\n}];"
+      },
+      "id": "http-gemini-script-image-prompts",
+      "name": "\ud83d\udcdc HTTP: Gemini \u2013 Script + Image Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        300
+      ],
+      "color": "#96CEB4"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "API_Usage",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "APIProvider",
+              "fieldValue": "Gemini"
+            },
+            {
+              "column": "APIEndpoint",
+              "fieldValue": "script-generation"
+            },
+            {
+              "column": "StatusCode",
+              "fieldValue": "200"
+            },
+            {
+              "column": "TokensUsed",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "ResponseTime",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "Language",
+              "fieldValue": "={{ $json.Language }}"
+            },
+            {
+              "column": "Tone",
+              "fieldValue": "={{ $json.Tone }}"
+            }
+          ]
+        }
+      },
+      "id": "log-api-usage-script",
+      "name": "\ud83d\udcca Log API Usage: Script Generation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2060,
+        450
+      ],
+      "color": "#96CEB4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate Caption + Hashtags using Gemini with EXACT prompt format\nconst topic = $json;\n\nconst captionPrompt = topic.captionPromptTemplate\n  .replace(/{{TOPIC_ID}}/g, topic.TopicID)\n  .replace(/{{TITLE}}/g, topic.Title)\n  .replace(/{{SCRIPT_TEXT}}/g, topic.Script)\n  .replace(/{{LANGUAGE}}/g, topic.Language);\n\nconst captionResp = await $httpRequest({\n  method: 'POST',\n  url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent',\n  headers: { 'x-goog-api-key': $env.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n  body: {\n    contents: [{ parts: [{ text: captionPrompt }] }],\n    generationConfig: { response_mime_type: 'application/json' }\n  },\n  json: true\n});\n\nif (!captionResp.candidates || !captionResp.candidates[0] || !captionResp.candidates[0].content) {\n  throw new Error('Invalid response from Gemini for caption generation');\n}\n\nconst captionData = JSON.parse(captionResp.candidates[0].content.parts[0].text);\n\n// Validate required fields from your prompt (Caption <= 120 chars, 3-5 hashtags)\nif (!captionData.Caption || !Array.isArray(captionData.Hashtags)) {\n  throw new Error('Missing required fields in caption generation response');\n}\n\nif (captionData.Caption.length > 120) {\n  console.warn(`Caption exceeds 120 characters: ${captionData.Caption.length} chars`);\n}\n\nif (captionData.Hashtags.length < 3 || captionData.Hashtags.length > 5) {\n  console.warn(`Hashtags count not in range 3-5: ${captionData.Hashtags.length} hashtags`);\n}\n\nreturn [{\n  json: {\n    ...topic,\n    Caption: captionData.Caption,\n    Hashtags: captionData.Hashtags.join(', '),\n    HashtagsJson: JSON.stringify(captionData.Hashtags)\n  }\n}];"
+      },
+      "id": "http-gemini-caption-hashtags",
+      "name": "\ud83c\udff7\ufe0f HTTP: Gemini \u2013 Caption + Hashtags",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        300
+      ],
+      "color": "#96CEB4"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "API_Usage",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "APIProvider",
+              "fieldValue": "Gemini"
+            },
+            {
+              "column": "APIEndpoint",
+              "fieldValue": "caption-generation"
+            },
+            {
+              "column": "StatusCode",
+              "fieldValue": "200"
+            },
+            {
+              "column": "TokensUsed",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "ResponseTime",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "Language",
+              "fieldValue": "={{ $json.Language }}"
+            },
+            {
+              "column": "CaptionLength",
+              "fieldValue": "={{ $json.Caption ? $json.Caption.length : 0 }}"
+            }
+          ]
+        }
+      },
+      "id": "log-api-usage-caption",
+      "name": "\ud83d\udcca Log API Usage: Caption Generation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2280,
+        450
+      ],
+      "color": "#96CEB4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Script/Caption \u2192 normalize fields, stringify ImagePromptsJson, HashtagsJson\nconst topic = $json;\n\n// Normalize and validate data\nconst normalizedData = {\n  ...topic,\n  Status: 'ScriptGenerated',\n  UpdatedAt: new Date().toISOString(),\n  // Ensure JSON fields are properly stringified\n  ImagePromptsJson: typeof topic.ImagePromptsJson === 'string' ? topic.ImagePromptsJson : JSON.stringify(topic.ImagePrompts || {}),\n  HashtagsJson: typeof topic.HashtagsJson === 'string' ? topic.HashtagsJson : JSON.stringify(topic.Hashtags ? topic.Hashtags.split(', ') : []),\n  // Ensure required fields exist\n  Script: topic.Script || '',\n  VoiceStyle: topic.VoiceStyle || 'Neutral',\n  Caption: topic.Caption || '',\n  Hashtags: topic.Hashtags || ''\n};\n\nreturn [{ json: normalizedData }];"
+      },
+      "id": "function-parse-script-caption",
+      "name": "\u2699\ufe0f Function: Parse Script/Caption",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2500,
+        300
+      ],
+      "color": "#96CEB4"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "Generated Content",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "ScriptGenerated"
+            },
+            {
+              "column": "Script",
+              "fieldValue": "={{ $json.Script }}"
+            },
+            {
+              "column": "VoiceStyle",
+              "fieldValue": "={{ $json.VoiceStyle }}"
+            },
+            {
+              "column": "Caption",
+              "fieldValue": "={{ $json.Caption }}"
+            },
+            {
+              "column": "Hashtags",
+              "fieldValue": "={{ $json.Hashtags }}"
+            },
+            {
+              "column": "HashtagsJson",
+              "fieldValue": "={{ $json.HashtagsJson }}"
+            },
+            {
+              "column": "ImagePromptsJson",
+              "fieldValue": "={{ $json.ImagePromptsJson }}"
+            },
+            {
+              "column": "UpdatedAt",
+              "fieldValue": "={{ $json.UpdatedAt }}"
+            }
+          ]
+        }
+      },
+      "id": "google-sheets-update-script-generated",
+      "name": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"ScriptGenerated\"",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2720,
+        300
+      ],
+      "color": "#96CEB4"
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.Language.toLowerCase() }}_{{ $json.VoiceGender.toLowerCase() }}",
+        "rules": [
+          {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.Language.toLowerCase() }}",
+                  "operation": "contains",
+                  "value2": "english"
+                },
+                {
+                  "value1": "={{ $json.VoiceGender.toLowerCase() }}",
+                  "operation": "equal",
+                  "value2": "male"
+                }
+              ]
+            },
+            "renameOutput": true,
+            "outputKey": "english_male"
+          },
+          {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.Language.toLowerCase() }}",
+                  "operation": "contains",
+                  "value2": "english"
+                },
+                {
+                  "value1": "={{ $json.VoiceGender.toLowerCase() }}",
+                  "operation": "equal",
+                  "value2": "female"
+                }
+              ]
+            },
+            "renameOutput": true,
+            "outputKey": "english_female"
+          },
+          {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.Language.toLowerCase() }}",
+                  "operation": "contains",
+                  "value2": "hindi"
+                },
+                {
+                  "value1": "={{ $json.VoiceGender.toLowerCase() }}",
+                  "operation": "equal",
+                  "value2": "male"
+                }
+              ]
+            },
+            "renameOutput": true,
+            "outputKey": "hindi_male"
+          },
+          {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.Language.toLowerCase() }}",
+                  "operation": "contains",
+                  "value2": "hindi"
+                },
+                {
+                  "value1": "={{ $json.VoiceGender.toLowerCase() }}",
+                  "operation": "equal",
+                  "value2": "female"
+                }
+              ]
+            },
+            "renameOutput": true,
+            "outputKey": "hindi_female"
+          }
+        ]
+      },
+      "id": "switch-if-select-tts-voice",
+      "name": "\ud83c\udfb5 Switch/IF: Select TTS voice by (language, voice_gender)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        2940,
+        300
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Set TTS voice parameters based on switch output\nconst topic = $json;\nlet voiceName = 'en-US-Wavenet-D';\nlet langCode = 'en-US';\n\n// Determine voice based on the switch output path\nconst switchOutput = $node.name;\nif (switchOutput.includes('english_male') || topic.Language.toLowerCase().includes('english') && topic.VoiceGender.toLowerCase() === 'male') {\n  voiceName = 'en-US-Wavenet-D';\n  langCode = 'en-US';\n} else if (switchOutput.includes('english_female') || topic.Language.toLowerCase().includes('english') && topic.VoiceGender.toLowerCase() === 'female') {\n  voiceName = 'en-US-Wavenet-F';\n  langCode = 'en-US';\n} else if (switchOutput.includes('hindi_male') || topic.Language.toLowerCase().includes('hindi') && topic.VoiceGender.toLowerCase() === 'male') {\n  voiceName = 'hi-IN-Wavenet-B';\n  langCode = 'hi-IN';\n} else if (switchOutput.includes('hindi_female') || topic.Language.toLowerCase().includes('hindi') && topic.VoiceGender.toLowerCase() === 'female') {\n  voiceName = 'hi-IN-Wavenet-E';\n  langCode = 'hi-IN';\n}\n\nreturn [{ json: { ...topic, TTSVoiceName: voiceName, TTSLanguageCode: langCode } }];"
+      },
+      "id": "function-set-tts-voice",
+      "name": "\ud83c\udfa4 Function: Set TTS Voice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3160,
+        200
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate JWT token for Google Cloud TTS authentication\nconst topic = $json;\n\n// Service account details from environment variables\nconst serviceAccountEmail = $env.GOOGLE_TTS_SERVICE_ACCOUNT_EMAIL;\nconst privateKey = $env.GOOGLE_TTS_PRIVATE_KEY;\n\n// Validate environment variables\nif (!serviceAccountEmail || !privateKey) {\n  throw new Error('Missing environment variables: GOOGLE_TTS_SERVICE_ACCOUNT_EMAIL or GOOGLE_TTS_PRIVATE_KEY');\n}\n\n// Create JWT header\nconst header = {\n  alg: 'RS256',\n  typ: 'JWT'\n};\n\n// Create JWT payload\nconst now = Math.floor(Date.now() / 1000);\nconst payload = {\n  iss: serviceAccountEmail,\n  scope: 'https://www.googleapis.com/auth/cloud-platform',\n  aud: 'https://oauth2.googleapis.com/token',\n  exp: now + 3600, // 1 hour\n  iat: now\n};\n\n// Base64 encode header and payload\nconst encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');\nconst encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');\n\n// Create signature\nconst crypto = require('crypto');\nconst signatureInput = `${encodedHeader}.${encodedPayload}`;\nconst signature = crypto.sign('RSA-SHA256', Buffer.from(signatureInput), privateKey);\nconst encodedSignature = signature.toString('base64url');\n\n// Create JWT\nconst jwt = `${encodedHeader}.${encodedPayload}.${encodedSignature}`;\n\n// Exchange JWT for access token\nconst tokenResponse = await $httpRequest({\n  method: 'POST',\n  url: 'https://oauth2.googleapis.com/token',\n  headers: {\n    'Content-Type': 'application/x-www-form-urlencoded'\n  },\n  body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`\n});\n\nconst accessToken = tokenResponse.access_token;\n\nreturn [{\n  json: {\n    ...topic,\n    jwt_token: accessToken\n  }\n}];"
+      },
+      "id": "function-generate-jwt-token",
+      "name": "\ud83d\udd10 Function: Generate JWT Token for TTS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        200
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "url": "https://texttospeech.googleapis.com/v1/text:synthesize",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.jwt_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": false,
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "input",
+              "value": "={\"text\": \"{{ $json.Script }}\"}"
+            },
+            {
+              "name": "voice",
+              "value": "={\"languageCode\": \"{{ $json.TTSLanguageCode }}\", \"name\": \"{{ $json.TTSVoiceName }}\"}"
+            },
+            {
+              "name": "audioConfig",
+              "value": "={\"audioEncoding\": \"MP3\", \"speakingRate\": 1.0, \"pitch\": 0.0}"
+            }
+          ]
+        },
+        "method": "POST"
+      },
+      "id": "http-google-cloud-tts",
+      "name": "\ud83c\udfa4 HTTP: Google Cloud TTS (SSML/text)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3600,
+        200
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Base64\u2192Binary (audio) and prepare for Google Drive upload (no file system)\nconst resp = $input.first().json || {};\nconst audioContent = resp.audioContent || $json.audioContent;\nif (!audioContent) throw new Error('No audioContent from TTS');\n\nconst buf = Buffer.from(audioContent, 'base64');\nconst filename = `${$json.TopicID || 'topic'}_${$json.TopicRunID || 'run'}.mp3`;\n\n// Prepare binary using helpers so Google Drive upload can consume it\nconst binaryData = await this.helpers.prepareBinaryData(buf, filename);\n\n// Return with binary so Google Drive upload node can use it directly\nreturn [{\n  json: {\n    ...$json,\n    AudioFileName: filename\n  },\n  binary: {\n    data: binaryData\n  }\n}];"
+      },
+      "id": "function-base64-to-binary-audio",
+      "name": "\ud83d\udcbe Function: Base64\u2192Binary (audio)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3820,
+        200
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "parents": "={{ $json.audioFolderId }}",
+        "name": "={{ $json.AudioFileName }}"
+      },
+      "id": "google-drive-upload-audio",
+      "name": "\u2601\ufe0f Google Drive: Upload Audio",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        4040,
+        200
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": "={{ $json.id }}",
+        "role": "reader",
+        "type": "anyone"
+      },
+      "id": "google-drive-share-audio",
+      "name": "\ud83d\udd17 Google Drive: Share Audio",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        4260,
+        200
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "API_Usage",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "APIProvider",
+              "fieldValue": "Google Cloud TTS"
+            },
+            {
+              "column": "APIEndpoint",
+              "fieldValue": "text-to-speech"
+            },
+            {
+              "column": "StatusCode",
+              "fieldValue": "200"
+            },
+            {
+              "column": "TokensUsed",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "ResponseTime",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "VoiceName",
+              "fieldValue": "={{ $json.TTSVoiceName }}"
+            },
+            {
+              "column": "Language",
+              "fieldValue": "={{ $json.TTSLanguageCode }}"
+            }
+          ]
+        }
+      },
+      "id": "log-api-usage-tts",
+      "name": "\ud83d\udcca Log API Usage: TTS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        4260,
+        350
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "Generated Content",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "AudioGenerated"
+            },
+            {
+              "column": "AudioFileLink",
+              "fieldValue": "={{ $json.webViewLink }}"
+            },
+            {
+              "column": "TTSVoiceName",
+              "fieldValue": "={{ $json.TTSVoiceName }}"
+            },
+            {
+              "column": "TTSLanguageCode",
+              "fieldValue": "={{ $json.TTSLanguageCode }}"
+            },
+            {
+              "column": "UpdatedAt",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "google-sheets-update-audio-generated",
+      "name": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"AudioGenerated\", AudioFileLink",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        4480,
+        200
+      ],
+      "color": "#FFEAA7"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Expand 4 image prompts \u2192 array of 4 items\nconst topic = $json;\nconst imagePrompts = topic.ImagePrompts;\nif (!imagePrompts || typeof imagePrompts !== 'object') {\n  throw new Error('ImagePrompts not found or invalid format');\n}\n\nconst prompts = [imagePrompts.Hook, imagePrompts.MainPoint1, imagePrompts.MainPoint2, imagePrompts.Teaser].filter(Boolean);\nif (prompts.length !== 4) {\n  throw new Error(`Expected 4 image prompts, got ${prompts.length}`);\n}\n\nreturn prompts.map((prompt, i) => ({\n  json: {\n    ...topic,\n    CurrentImagePrompt: prompt,\n    ImageIndex: i + 1,\n    TotalImages: 4,\n    ImageType: ['Hook', 'MainPoint1', 'MainPoint2', 'Teaser'][i]\n  }\n}));"
+      },
+      "id": "function-expand-4-image-prompts",
+      "name": "\ud83d\uddbc\ufe0f Function: Expand 4 image prompts \u2192 array of 4 items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4700,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "id": "split-in-batches-iterate-4-images",
+      "name": "\ud83d\udd04 Split In Batches (iterate 4 images)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        4920,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "url": "https://api.cloudflare.com/client/v4/accounts/{{ $env.CLOUDFLARE_ACCOUNT_ID }}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0",
+        "sendHeaders": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.CLOUDFLARE_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": false,
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.CurrentImagePrompt }}"
+            },
+            {
+              "name": "width",
+              "value": "={{ $json.image_width || 1080 }}"
+            },
+            {
+              "name": "height",
+              "value": "={{ $json.image_height || 1920 }}"
+            }
+          ]
+        }
+      },
+      "id": "http-cloudflare-workers-ai-image",
+      "name": "\u2601\ufe0f HTTP: Cloudflare Workers AI \u2013 image #i",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5140,
+        100
+      ],
+      "continueOnFail": true,
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "between",
+              "value2": 200,
+              "value3": 299
+            }
+          ],
+          "boolean": [
+            {
+              "value1": "={{ $json.result && $json.result.image ? true : false }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-cf-success",
+      "name": "\u2753 IF: CF success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5360,
+        100
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "url": "https://api.together.xyz/v1/images/generations",
+        "sendHeaders": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.TOGETHER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": false,
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "model",
+              "value": "stabilityai/stable-diffusion-xl-base-1.0"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.CurrentImagePrompt }}"
+            },
+            {
+              "name": "width",
+              "value": "={{ $json.image_width || 1080 }}"
+            },
+            {
+              "name": "height",
+              "value": "={{ $json.image_height || 1920 }}"
+            }
+          ]
+        }
+      },
+      "id": "http-together-ai-fallback",
+      "name": "\ud83e\udd16 HTTP: Together AI \u2013 fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5580,
+        200
+      ],
+      "continueOnFail": true,
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "between",
+              "value2": 200,
+              "value3": 299
+            }
+          ],
+          "boolean": [
+            {
+              "value1": "={{ $json.data && $json.data[0] ? true : false }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-together-success",
+      "name": "\u2753 IF: Together success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5800,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "url": "{{ $env.HUGGINGFACE_API_URL }}",
+        "sendHeaders": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.HUGGINGFACE_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonParameters": false,
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "inputs",
+              "value": "={{ $json.CurrentImagePrompt }}"
+            },
+            {
+              "name": "parameters",
+              "value": "={\"width\": {{ $json.image_width || 1080 }}, \"height\": {{ $json.image_height || 1920 }}}"
+            }
+          ]
+        }
+      },
+      "id": "http-hugging-face-fallback",
+      "name": "\ud83e\udd17 HTTP: Hugging Face \u2013 fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6020,
+        300
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process image result and prepare binary for Google Drive upload\nconst topic = $json;\nlet imageBuffer = null;\nlet source = 'failed';\n\n// Check which source provided the image\nconst cfResp = $items(\"\u2601\ufe0f HTTP: Cloudflare Workers AI \u2013 image #i\")[0]?.json;\nconst togetherResp = $items(\"\ud83e\udd16 HTTP: Together AI \u2013 fallback\")[0]?.json;\nconst hfResp = $input.first().json;\n\nif (cfResp && cfResp.result && cfResp.result.image) {\n  imageBuffer = Buffer.from(cfResp.result.image, 'base64');\n  source = 'cloudflare';\n} else if (togetherResp && togetherResp.data && togetherResp.data[0]) {\n  if (togetherResp.data[0].b64_json) {\n    imageBuffer = Buffer.from(togetherResp.data[0].b64_json, 'base64');\n  } else if (togetherResp.data[0].url) {\n    const imgResp = await $httpRequest({ method: 'GET', url: togetherResp.data[0].url, encoding: 'buffer' });\n    imageBuffer = imgResp.body;\n  }\n  source = 'together';\n} else if (hfResp && hfResp.body) {\n  imageBuffer = Buffer.isBuffer(hfResp.body) ? hfResp.body : Buffer.from(hfResp.body);\n  source = 'huggingface';\n}\n\nif (!imageBuffer) {\n  throw new Error(`All image providers failed for image ${topic.ImageIndex}`);\n}\n\nconst filename = `img_${topic.TopicID}_${topic.ImageIndex}_${topic.TopicRunID}.png`;\n\n// Prepare binary using helpers so Google Drive upload can consume it\nconst binaryData = await this.helpers.prepareBinaryData(imageBuffer, filename);\n\n// Return item with binary\nreturn [{\n  json: {\n    ...topic,\n    ImageSource: source,\n    ImageFileName: filename\n  },\n  binary: {\n    data: binaryData\n  }\n}];"
+      },
+      "id": "function-process-image-result",
+      "name": "\ud83d\uddbc\ufe0f Function: Process Image Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6240,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "parents": "={{ $json.imagesFolderId }}",
+        "name": "={{ $json.ImageFileName }}"
+      },
+      "id": "google-drive-upload-image",
+      "name": "\u2601\ufe0f Google Drive: Upload Image",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        6680,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": "={{ $json.id }}",
+        "role": "reader",
+        "type": "anyone"
+      },
+      "id": "google-drive-share-image",
+      "name": "\ud83d\udd17 Google Drive: Share Image",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        6900,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "API_Usage",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "APIProvider",
+              "fieldValue": "={{ $json.ImageSource }}"
+            },
+            {
+              "column": "APIEndpoint",
+              "fieldValue": "image-generation"
+            },
+            {
+              "column": "StatusCode",
+              "fieldValue": "200"
+            },
+            {
+              "column": "TokensUsed",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "ResponseTime",
+              "fieldValue": "N/A"
+            },
+            {
+              "column": "ImageIndex",
+              "fieldValue": "={{ $json.ImageIndex }}"
+            },
+            {
+              "column": "ImageType",
+              "fieldValue": "={{ $json.ImageType }}"
+            }
+          ]
+        }
+      },
+      "id": "log-api-usage-image",
+      "name": "\ud83d\udcca Log API Usage: Image Generation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        6900,
+        350
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {},
+      "id": "merge-pass-through-after-all-4-images",
+      "name": "\ud83d\udd04 Merge (Pass Through) \u2013 after all 4 images",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        7120,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect image paths \u2192 comma-join for DB\nconst items = $items('\ud83d\udd17 Google Drive: Share Image');\nif (items.length !== 4) {\n  throw new Error(`Expected 4 images, but got ${items.length}`);\n}\n\nconst imageLinks = items.map(i => i.json.webViewLink).filter(Boolean);\nconst imageSources = items.map(i => i.json.ImageSource).filter(Boolean);\nconst originalData = $items(\"\ud83d\uddbc\ufe0f Function: Expand 4 image prompts \u2192 array of 4 items\")[0].json;\n\nreturn [{\n  json: {\n    ...originalData,\n    ImageFileLinks: imageLinks.join(', '),\n    ImageSources: imageSources.join(', '),\n    Status: 'ImagesGenerated',\n    UpdatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "function-collect-image-paths",
+      "name": "\ud83d\udcf8 Function: Collect image paths \u2192 comma-join for DB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7340,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "Generated Content",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "ImagesGenerated"
+            },
+            {
+              "column": "ImageFileLinks",
+              "fieldValue": "={{ $json.ImageFileLinks }}"
+            },
+            {
+              "column": "ImageSources",
+              "fieldValue": "={{ $json.ImageSources }}"
+            },
+            {
+              "column": "UpdatedAt",
+              "fieldValue": "={{ $json.UpdatedAt }}"
+            }
+          ]
+        }
+      },
+      "id": "google-sheets-update-images-generated",
+      "name": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"ImagesGenerated\", ImageFileLinks",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        7560,
+        200
+      ],
+      "color": "#DDA0DD"
+    },
+    {
+      "parameters": {
+        "command": "ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{{ $json.AudioFilePath }}\""
+      },
+      "id": "execute-command-ffprobe-duration",
+      "name": "\ud83d\udd0d Execute Command: ffprobe duration (optional but useful)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        7780,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare FFmpeg command for 40-second video (10 seconds per image)\nconst topic = $json;\nconst audioPath = topic.AudioFilePath;\n\n// Fixed duration: 40 seconds total, 10 seconds per image\nconst totalDuration = 40;\nconst perImageDuration = 10;\nconst numImages = 4;\n\n// Get image file IDs from Drive links\nconst imageLinks = (topic.ImageFileLinks || '').split(', ').filter(Boolean);\nif (imageLinks.length !== numImages) {\n  throw new Error(`Expected ${numImages} image links, got ${imageLinks.length}`);\n}\n\n// Extract file IDs and create download URLs for direct access\nconst imageUrls = imageLinks.map(link => {\n  const match = link.match(/\\/d\\/([a-zA-Z0-9-_]+)/);\n  if (match) {\n    return `https://drive.google.com/uc?export=download&id=${match[1]}`;\n  }\n  return link;\n});\n\nconst outName = `video_${topic.TopicID}_${topic.TopicRunID}.mp4`;\nconst outPath = `/tmp/${outName}`;\n\n// Build FFmpeg command for 40-second video with 10 seconds per image\nconst imageInputs = imageUrls.map(url => `-loop 1 -t ${perImageDuration} -i \"${url}\"`).join(' ');\nconst filters = imageUrls.map((_, i) => `[${i}:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1:1[v${i}]`).join(';');\nconst concatInputs = imageUrls.map((_, i) => `[v${i}]`).join('');\nconst audioStreamIndex = imageUrls.length;\n\n// Create 40-second video with audio (loop audio if shorter, trim if longer)\nconst filterComplex = `-filter_complex \"${filters};${concatInputs}concat=n=${imageUrls.length}:v=1:a=0,format=yuv420p[v]; [${audioStreamIndex}:a]aloop=loop=-1:size=2*44100*${totalDuration},atrim=duration=${totalDuration}[a]\"`;\nconst command = `ffmpeg -y ${imageInputs} -i \"${audioPath}\" ${filterComplex} -map \"[v]\" -map \"[a]\" -c:v libx264 -r 30 -c:a aac -t ${totalDuration} \"${outPath}\"`;\n\nreturn [{ json: { ...topic, ffmpegCommand: command, VideoLocalPath: outPath, VideoFileName: outName, VideoDuration: totalDuration } }];"
+      },
+      "id": "function-prepare-ffmpeg-command",
+      "name": "\ud83c\udfac Function: Prepare FFmpeg Command",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8000,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "command": "={{ $json.ffmpegCommand }}"
+      },
+      "id": "execute-command-ffmpeg-make-video",
+      "name": "\ud83c\udfa5 Execute Command: ffmpeg \u2192 make 9:16 slideshow + audio MP4",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        8220,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $json.VideoLocalPath }}"
+      },
+      "id": "read-video-binary",
+      "name": "\ud83d\udcc1 Read Video Binary",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        8440,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "parents": "={{ $json.videosFolderId }}",
+        "name": "={{ $json.VideoFileName }}"
+      },
+      "id": "google-drive-upload-video",
+      "name": "\u2601\ufe0f Google Drive: Upload Video",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        8660,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": "={{ $json.id }}",
+        "role": "reader",
+        "type": "anyone"
+      },
+      "id": "google-drive-share-video",
+      "name": "\ud83d\udd17 Google Drive: Share Video",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        8880,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "Generated Content",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "VideoGenerated"
+            },
+            {
+              "column": "VideoFileLink",
+              "fieldValue": "={{ $json.webViewLink }}"
+            },
+            {
+              "column": "UpdatedAt",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "google-sheets-update-video-generated",
+      "name": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"VideoGenerated\", VideoFileLink",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        9100,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "Generated Content",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.TopicRunID }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "Completed"
+            },
+            {
+              "column": "CompletedAt",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "UpdatedAt",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "google-sheets-update-completed",
+      "name": "\ud83c\udfc1 Google Sheets: Update \u2192 Status=\"Completed\", CompletedAt=now()",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        9320,
+        200
+      ],
+      "color": "#FF9F43"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Topics extracted and processing started\", \"topics_count\": $items('\ud83d\udccb Function: Parse Topics').length } }}"
+      },
+      "id": "respond-to-webhook",
+      "name": "\u2705 Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        500
+      ],
+      "color": "#FF6B6B"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "sheetName": "ErrorLog",
+        "columnRow": "A1:AZ1",
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "RunID",
+              "fieldValue": "={{ $json.runId || 'unknown' }}"
+            },
+            {
+              "column": "TopicID",
+              "fieldValue": "={{ $json.TopicID || 'unknown' }}"
+            },
+            {
+              "column": "ErrorType",
+              "fieldValue": "Workflow Error"
+            },
+            {
+              "column": "ErrorMessage",
+              "fieldValue": "={{ $json.error?.message || 'Unknown error' }}"
+            },
+            {
+              "column": "NodeName",
+              "fieldValue": "={{ $json.node?.name || 'Unknown node' }}"
+            },
+            {
+              "column": "StackTrace",
+              "fieldValue": "={{ $json.error?.stack || 'No stack trace' }}"
+            },
+            {
+              "column": "Status",
+              "fieldValue": "Failed"
+            }
+          ]
+        }
+      },
+      "id": "log-error-to-sheet",
+      "name": "\ud83d\udea8 Log Error to ErrorLog",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        650
+      ],
+      "color": "#FF4757",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {},
+      "id": "workflow-error-trigger",
+      "name": "\u26a0\ufe0f Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        650
+      ],
+      "color": "#FF4757"
+    }
+  ],
+  "connections": {
+    "\ud83d\ude80 Webhook (trigger)": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd10 IF (check x-webhook-secret)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd10 IF (check x-webhook-secret)": {
+      "main": [
+        [
+          {
+            "node": "\u2699\ufe0f Function: InitRun",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83d\udeab Respond 401: Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2699\ufe0f Function: InitRun": {
+      "main": [
+        [
+          {
+            "node": "\ud83e\udde0 HTTP: Gemini \u2013 Topic Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83e\udde0 HTTP: Gemini \u2013 Topic Extraction": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udccb Function: Parse Topics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83d\udcca Log API Usage: Topic Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udccb Function: Parse Topics": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcca Google Sheets: Append Topic Backlog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcca Google Sheets: Append Topic Backlog": {
+      "main": [
+        [
+          {
+            "node": "\u2705 Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83d\udd04 Split In Batches (iterate topics)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd04 Split In Batches (iterate topics)": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcca Google Sheets: Upsert Generated Content seed row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcca Google Sheets: Upsert Generated Content seed row": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcdc HTTP: Gemini \u2013 Script + Image Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcdc HTTP: Gemini \u2013 Script + Image Prompts": {
+      "main": [
+        [
+          {
+            "node": "\ud83c\udff7\ufe0f HTTP: Gemini \u2013 Caption + Hashtags",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83d\udcca Log API Usage: Script Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83c\udff7\ufe0f HTTP: Gemini \u2013 Caption + Hashtags": {
+      "main": [
+        [
+          {
+            "node": "\u2699\ufe0f Function: Parse Script/Caption",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83d\udcca Log API Usage: Caption Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2699\ufe0f Function: Parse Script/Caption": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"ScriptGenerated\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcca Google Sheets: Update \u2192 Status=\"ScriptGenerated\"": {
+      "main": [
+        [
+          {
+            "node": "\ud83c\udfb5 Switch/IF: Select TTS voice by (language, voice_gender)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83c\udfb5 Switch/IF: Select TTS voice by (language, voice_gender)": {
+      "main": [
+        [
+          {
+            "node": "\ud83c\udfa4 Function: Set TTS Voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83c\udfa4 Function: Set TTS Voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83c\udfa4 Function: Set TTS Voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83c\udfa4 Function: Set TTS Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83c\udfa4 Function: Set TTS Voice": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd10 Function: Generate JWT Token for TTS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd10 Function: Generate JWT Token for TTS": {
+      "main": [
+        [
+          {
+            "node": "\ud83c\udfa4 HTTP: Google Cloud TTS (SSML/text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83c\udfa4 HTTP: Google Cloud TTS (SSML/text)": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcbe Function: Base64\u2192Binary (audio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcbe Function: Base64\u2192Binary (audio)": {
+      "main": [
+        [
+          {
+            "node": "\u2601\ufe0f Google Drive: Upload Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2601\ufe0f Google Drive: Upload Audio": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd17 Google Drive: Share Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd17 Google Drive: Share Audio": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"AudioGenerated\", AudioFileLink",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83d\udcca Log API Usage: TTS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcca Google Sheets: Update \u2192 Status=\"AudioGenerated\", AudioFileLink": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\uddbc\ufe0f Function: Expand 4 image prompts \u2192 array of 4 items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\uddbc\ufe0f Function: Expand 4 image prompts \u2192 array of 4 items": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd04 Split In Batches (iterate 4 images)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd04 Split In Batches (iterate 4 images)": {
+      "main": [
+        [
+          {
+            "node": "\u2601\ufe0f HTTP: Cloudflare Workers AI \u2013 image #i",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2601\ufe0f HTTP: Cloudflare Workers AI \u2013 image #i": {
+      "main": [
+        [
+          {
+            "node": "\u2753 IF: CF success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2753 IF: CF success?": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\uddbc\ufe0f Function: Process Image Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83e\udd16 HTTP: Together AI \u2013 fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83e\udd16 HTTP: Together AI \u2013 fallback": {
+      "main": [
+        [
+          {
+            "node": "\u2753 IF: Together success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2753 IF: Together success?": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\uddbc\ufe0f Function: Process Image Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83e\udd17 HTTP: Hugging Face \u2013 fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83e\udd17 HTTP: Hugging Face \u2013 fallback": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\uddbc\ufe0f Function: Process Image Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\uddbc\ufe0f Function: Process Image Result": {
+      "main": [
+        [
+          {
+            "node": "\u2601\ufe0f Google Drive: Upload Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2601\ufe0f Google Drive: Upload Image": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd17 Google Drive: Share Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd17 Google Drive: Share Image": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd04 Merge (Pass Through) \u2013 after all 4 images",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "\ud83d\udcca Log API Usage: Image Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd04 Merge (Pass Through) \u2013 after all 4 images": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcf8 Function: Collect image paths \u2192 comma-join for DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcf8 Function: Collect image paths \u2192 comma-join for DB": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"ImagesGenerated\", ImageFileLinks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcca Google Sheets: Update \u2192 Status=\"ImagesGenerated\", ImageFileLinks": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd0d Execute Command: ffprobe duration (optional but useful)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd0d Execute Command: ffprobe duration (optional but useful)": {
+      "main": [
+        [
+          {
+            "node": "\ud83c\udfac Function: Prepare FFmpeg Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83c\udfac Function: Prepare FFmpeg Command": {
+      "main": [
+        [
+          {
+            "node": "\ud83c\udfa5 Execute Command: ffmpeg \u2192 make 9:16 slideshow + audio MP4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83c\udfa5 Execute Command: ffmpeg \u2192 make 9:16 slideshow + audio MP4": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcc1 Read Video Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcc1 Read Video Binary": {
+      "main": [
+        [
+          {
+            "node": "\u2601\ufe0f Google Drive: Upload Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\u2601\ufe0f Google Drive: Upload Video": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd17 Google Drive: Share Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udd17 Google Drive: Share Video": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udcca Google Sheets: Update \u2192 Status=\"VideoGenerated\", VideoFileLink",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83d\udcca Google Sheets: Update \u2192 Status=\"VideoGenerated\", VideoFileLink": {
+      "main": [
+        [
+          {
+            "node": "\ud83c\udfc1 Google Sheets: Update \u2192 Status=\"Completed\", CompletedAt=now()",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\ud83c\udfc1 Google Sheets: Update \u2192 Status=\"Completed\", CompletedAt=now()": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udd04 Split In Batches (iterate topics)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "\u26a0\ufe0f Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "\ud83d\udea8 Log Error to ErrorLog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

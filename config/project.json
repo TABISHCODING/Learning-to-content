@@ -1,0 +1,26 @@
+{
+  "name": "learning-to-content-python",
+  "version": "2.0.0",
+  "description": "Complete Python replacement for n8n workflow",
+  "author": "AI Assistant",
+  "license": "MIT",
+  "python_version": ">=3.8",
+  "features": {
+    "topic_extraction": "Gemini API",
+    "script_generation": "Gemini API with prompts",
+    "audio_generation": "Google TTS with voice mapping",
+    "image_generation": "Cloudflare \u2192 Together \u2192 HuggingFace",
+    "video_assembly": "FFmpeg",
+    "database": "Google Sheets integration",
+    "storage": "Google Drive integration",
+    "status_flow": "Real-time updates",
+    "error_handling": "Comprehensive logging"
+  },
+  "endpoints": {
+    "health": "/health",
+    "features": "/api/features",
+    "webhook": "/webhook/learning-to-content",
+    "status": "/api/workflow/status/<id>",
+    "download": "/download/<filename>"
+  }
+}

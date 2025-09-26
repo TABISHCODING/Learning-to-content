@@ -1,0 +1,141 @@
+🛠 Master Developer Prompt (for n8n Workflow + Project Integration)
+
+I am building an AI-powered educational shorts generator with the following components:
+
+UI: Streamlit app (code provided)
+
+Database: Excel/Google Sheet schema (file provided)
+
+Prompts: All the AI prompts for topic extraction, script generation, image prompts, voice styles, etc. (included below)
+
+Workflow Engine: n8n
+
+📂 What I Am Sharing With You
+
+UI Code → so you understand how the user interacts with the system (input, preview, status updates).
+
+Recently updated: added Voice Gender selection (Male / Female) in the UI payload.
+
+DB Schema (Excel/Sheets) → to show where every piece of data is stored and how it should be updated.
+
+Prompts →
+
+Topic Extraction Prompt (Gemini)
+
+Script+Image+Voice Prompt (Gemini)
+
+Image Generation (Cloudflare fallback)
+
+TTS Generation (Google Cloud TTS)
+
+Video Assembly (FFmpeg)
+
+👉 I am sharing these so you can analyze the current state, then design the missing workflow logic in n8n.
+
+🧩 Your Task
+
+Read my UI code + DB schema + prompts carefully.
+
+Identify missing pieces → especially around status tracking and how outputs map between steps.
+
+Design and implement the n8n workflow so it connects:
+
+Raw Notes → Topic Extraction (Gemini)
+
+Topic → Script + Image Prompts (Gemini)
+
+Script → TTS (Audio, based on Language + Gender selection)
+
+Image Prompts → Cloudflare API (fallback: Together/HuggingFace)
+
+Audio + Images → FFmpeg → Final Video
+
+Implement Voice Gender Logic in TTS → based on language + voice_gender from UI:
+
+Example Mapping (Google Cloud TTS):
+
+English + Male → en-US-Wavenet-D
+
+English + Female → en-US-Wavenet-F
+
+Hindi/Hinglish + Male → hi-IN-Wavenet-B
+
+Hindi/Hinglish + Female → hi-IN-Wavenet-E
+
+👉 Use an IF or Switch node in n8n to set a variable (tts_voice_name) before calling TTS.
+
+Update the DB at every step with correct status + file paths.
+
+Update the UI status tracker in real-time, using the following flow:
+
+🔄 Status Flow (must implement)
+
+Pending → Topic just extracted.
+
+ScriptGenerated → Gemini created script + image prompts.
+
+AudioGenerated → TTS finished.
+
+ImagesGenerated → All 4 images ready.
+
+VideoGenerated → Final MP4 created.
+
+Completed → Everything done and saved.
+
+👉 This status must update in both the Database and the UI so I can debug/preview easily.
+
+⚙️ Workflow Rules
+
+One topic at a time → full cycle completes before next.
+
+Image generation waits until all 4 are successfully created.
+
+Fallback APIs for images → Cloudflare → Together → HuggingFace.
+
+DB Mapping Required:
+
+Script text
+
+Voice gender + voice style + final TTS voice name
+
+Audio path
+
+Image paths (4 images)
+
+Video path
+
+Traceability → every stage can be previewed in the UI with live status.
+
+✅ Deliverables
+
+A working n8n workflow JSON (export)
+
+Notes on how you mapped DB columns → workflow steps
+
+Updates to my UI code (if needed) to support status tracking
+
+🔑 Why I Shared All Code + Prompts
+
+UI code → so you see how statuses, previews, and gender selection are handled.
+
+DB schema → so you know exactly what fields to update.
+
+Prompts → so you don’t redesign; just integrate them properly.
+
+👉 Your job is to fill the missing links (status flow + step orchestration + TTS voice logic) and deliver a ready-to-run workflow.
+
+🔑 Key Rules
+
+One topic at a time → wait for images + audio before next.
+
+Fallback safety → Cloudflare → Together → HuggingFace for images.
+
+Voice gender control → UI sends voice_gender, workflow maps it to correct Google TTS voice.
+
+UI Debugging → Live status at each stage (Starter, Working, Waiting, Completed).
+
+DB Sync → File paths + statuses always stored.
+
+Images sequential → All 4 must succeed → then mark ImagesGenerated.
+
+Retries with fallback → ensures no broken flow.
